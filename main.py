@@ -6,23 +6,22 @@ import cv2
 import numpy as np
 from liveness.detector import LivenessDetector
 
-app = FastAPI(title="Liveness Detection API (cvzone)")
+app = FastAPI(title="Liveness Detection API")
 
-# Serve folder "web" agar index.html bisa diakses
+# Serve folder web
 app.mount("/web", StaticFiles(directory="web"), name="web")
 
 detector = LivenessDetector()
 
 @app.get("/", response_class=HTMLResponse)
 def root():
-    """Tampilkan halaman index.html"""
     with open("web/index.html", "r", encoding="utf-8") as f:
         return f.read()
 
 @app.websocket("/liveness")
 async def liveness_stream(websocket: WebSocket):
     await websocket.accept()
-    print("✅ Client connected to liveness stream")
+    print("✅ Client connected")
 
     while True:
         try:
@@ -32,7 +31,7 @@ async def liveness_stream(websocket: WebSocket):
             np_arr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-            # deteksi liveness
+            # analisis frame
             result = detector.analyze(frame)
 
             # kirim hasil ke client
