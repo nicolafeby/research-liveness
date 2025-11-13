@@ -1,4 +1,6 @@
 from fastapi import FastAPI, WebSocket
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import base64
 import cv2
 import numpy as np
@@ -6,11 +8,16 @@ from liveness.detector import LivenessDetector
 
 app = FastAPI(title="Liveness Detection API (cvzone)")
 
+# Serve folder "web" agar index.html bisa diakses
+app.mount("/web", StaticFiles(directory="web"), name="web")
+
 detector = LivenessDetector()
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def root():
-    return {"message": "Liveness API is running 🚀"}
+    """Tampilkan halaman index.html"""
+    with open("web/index.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.websocket("/liveness")
 async def liveness_stream(websocket: WebSocket):
