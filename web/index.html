@@ -5,16 +5,16 @@
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>Liveness Detection POC 🎥</title>
       <style>
-         body { font-family: Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; }
+         body { font-family: Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; background:#f5f5f5; }
          #container { position: relative; width:480px; height:360px; }
-         video { width:100%; height:100%; border-radius:10px; }
+         video { width:100%; height:100%; border-radius:10px; background:black; }
          canvas { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
-         #status { padding:10px 20px; border-radius:5px; margin-top:10px; }
-         #status.real { background-color: #4caf50; color:white; }
-         #status.fake { background-color: #f44336; color:white; }
-         #status.loading { background-color:#ff9800; color:white; }
-         button { padding:10px 20px; margin-top:10px; border:none; border-radius:5px; background-color:#2196f3; color:white; cursor:pointer; }
-         button.disconnect { background-color:#f44336; }
+         #status { padding:10px 20px; border-radius:5px; margin-top:15px; font-weight:bold; }
+         #status.real { background:#4caf50; color:white; }
+         #status.fake { background:#f44336; color:white; }
+         #status.loading { background:#ff9800; color:white; }
+         button { padding:10px 20px; margin-top:10px; border:none; border-radius:6px; font-size:16px; background:#2196f3; color:white; cursor:pointer; }
+         button.disconnect { background:#d32f2f; }
       </style>
    </head>
    <body>
@@ -26,100 +26,123 @@
       <div id="status" class="loading">Disconnected</div>
       <button id="connectBtn">Connect</button>
       <script>
+         /* ========== Element references ========== */
          const video = document.getElementById('video');
          const canvas = document.getElementById('overlay');
          const ctx = canvas.getContext('2d');
          const statusDiv = document.getElementById('status');
          const connectBtn = document.getElementById('connectBtn');
          
+         /* ========== State ========== */
          let socket = null;
          let stream = null;
          let sendInterval = null;
          let animFrameId = null;
          
-         // Current and previous positions for smooth trailing
+         // Faces, eyes, smiles
          let overlayData = { faces: [], eyes: [], smiles: [], liveness:false, blink:false, smile:false };
          let prevFaces = [], prevEyes = [], prevSmiles = [];
          
-         // Timestamps untuk animasi sementara
          let blinkTimer = 0, smileTimer = 0;
          
-         connectBtn.addEventListener('click', () => {
-           if(!socket || socket.readyState===WebSocket.CLOSED) startConnection();
+         /* ========== Helpers ========== */
+         function lerp(a, b, t) { return a + (b - a) * t; }
+         
+         function setStatus(text, cls) {
+           statusDiv.textContent = text;
+           statusDiv.className = cls;
+         }
+         
+         /* ========== Connect Button ========== */
+         connectBtn.addEventListener("click", () => {
+           if (!socket || socket.readyState === WebSocket.CLOSED) startConnection();
            else disconnect();
          });
          
-         function lerp(a, b, t){ return a + (b-a)*t; }
+         /* ========== START CONNECTION ========== */
+         async function startConnection() {
          
-         async function startConnection(){
-           socket = new WebSocket('ws://' + window.location.host + '/liveness');
-           statusDiv.textContent='Connecting...';
-           statusDiv.className='loading';
-           connectBtn.textContent='Disconnect';
-           connectBtn.classList.add('disconnect');
+           // FIX: wajib gunakan wss:// untuk domain HTTPS
+           const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+           const wsUrl = protocol + window.location.host + "/liveness";
+         
+           socket = new WebSocket(wsUrl);
+         
+           setStatus("Connecting...", "loading");
+           connectBtn.textContent = "Disconnect";
+           connectBtn.classList.add("disconnect");
          
            socket.onopen = async () => {
-             statusDiv.textContent='Streaming...';
-             statusDiv.className='loading';
+             setStatus("Streaming...", "loading");
              await startCamera();
              drawOverlay();
            };
          
-           socket.onmessage = event => {
+           socket.onmessage = (event) => {
              overlayData = JSON.parse(event.data);
-             if(overlayData.blink) blinkTimer = performance.now();
-             if(overlayData.smile) smileTimer = performance.now();
          
-             statusDiv.textContent = overlayData.liveness ? '✅ Liveness Detected' : '❌ Fake / Spoof Detected';
-             statusDiv.className = overlayData.liveness ? 'real' : 'fake';
+             if (overlayData.blink) blinkTimer = performance.now();
+             if (overlayData.smile) smileTimer = performance.now();
+         
+             setStatus(
+               overlayData.liveness ? "✅ Liveness Detected" : "❌ Fake / Spoof Detected",
+               overlayData.liveness ? "real" : "fake"
+             );
            };
          
-           socket.onclose = () => disconnect();
+           socket.onerror = () => {
+             setStatus("WebSocket Error", "fake");
+           };
+         
+           socket.onclose = () => {
+             disconnect();
+           };
          }
          
-         async function startCamera(){
-           try{
-             stream = await navigator.mediaDevices.getUserMedia({ video:true });
+         /* ========== START CAMERA & SEND FRAMES ========== */
+         async function startCamera() {
+           try {
+             stream = await navigator.mediaDevices.getUserMedia({ video: true });
              video.srcObject = stream;
          
-             video.onloadedmetadata = ()=>{
+             video.onloadedmetadata = () => {
                canvas.width = video.videoWidth;
                canvas.height = video.videoHeight;
              };
          
-             sendInterval = setInterval(()=>{
-               if(socket && socket.readyState===WebSocket.OPEN){
-                 const tempCanvas = document.createElement('canvas');
-                 tempCanvas.width = video.videoWidth;
-                 tempCanvas.height = video.videoHeight;
-                 const tempCtx = tempCanvas.getContext('2d');
-                 tempCtx.drawImage(video,0,0,tempCanvas.width,tempCanvas.height);
+             sendInterval = setInterval(() => {
+               if (socket && socket.readyState === WebSocket.OPEN) {
+                 const temp = document.createElement("canvas");
+                 temp.width = video.videoWidth;
+                 temp.height = video.videoHeight;
+                 const tctx = temp.getContext("2d");
          
-                 tempCanvas.toBlob(blob=>{
+                 tctx.drawImage(video, 0, 0, temp.width, temp.height);
+         
+                 temp.toBlob((blob) => {
                    const reader = new FileReader();
-                   reader.onloadend = ()=>socket.send(reader.result.split(',')[1]);
+                   reader.onloadend = () => socket.send(reader.result.split(",")[1]);
                    reader.readAsDataURL(blob);
-                 },'image/jpeg',0.7);
+                 }, "image/jpeg", 0.7);
                }
              }, 200);
-           } catch(err){
-             console.error('Camera access denied:',err);
-             statusDiv.textContent='Camera access denied';
-             statusDiv.className='fake';
+         
+           } catch (err) {
+             setStatus("Camera access denied", "fake");
            }
          }
          
-         // Draw rectangles with trailing effect
-         function drawOverlay(){
-           ctx.clearRect(0,0,canvas.width,canvas.height);
-           const t = 0.2; // smoothing factor for lerp
+         /* ========== DRAW OVERLAY ========== */
+         function drawOverlay() {
+           ctx.clearRect(0, 0, canvas.width, canvas.height);
            const now = performance.now();
+           const t = 0.25;
          
-           function smoothRects(prev, curr){
+           function smooth(prev, curr) {
              const out = [];
-             for(let i=0;i<curr.length;i++){
+             for (let i = 0; i < curr.length; i++) {
                const c = curr[i];
-               const p = prev[i]||{x:c.x,y:c.y,w:c.w,h:c.h};
+               const p = prev[i] || c;
                out.push({
                  x: lerp(p.x, c.x, t),
                  y: lerp(p.y, c.y, t),
@@ -130,53 +153,51 @@
              return out;
            }
          
-           prevFaces = smoothRects(prevFaces, overlayData.faces||[]);
-           prevEyes = smoothRects(prevEyes, overlayData.eyes||[]);
-           prevSmiles = smoothRects(prevSmiles, overlayData.smiles||[]);
+           prevFaces = smooth(prevFaces, overlayData.faces || []);
+           prevEyes  = smooth(prevEyes, overlayData.eyes  || []);
+           prevSmiles = smooth(prevSmiles, overlayData.smiles || []);
          
-           // wajah
-           prevFaces.forEach(f=>{
-             ctx.strokeStyle = overlayData.liveness ? 'lime':'red';
+           // Faces
+           prevFaces.forEach((f) => {
+             ctx.strokeStyle = overlayData.liveness ? "lime" : "red";
              ctx.lineWidth = 3;
-             ctx.strokeRect(f.x,f.y,f.w,f.h);
+             ctx.strokeRect(f.x, f.y, f.w, f.h);
            });
          
-           // mata
-           prevEyes.forEach(e=>{
-             ctx.strokeStyle = (blinkTimer && now - blinkTimer<300)? 'cyan':'blue';
+           // Eyes
+           prevEyes.forEach((e) => {
+             ctx.strokeStyle = (now - blinkTimer < 300) ? "cyan" : "blue";
              ctx.lineWidth = 2;
-             ctx.strokeRect(e.x,e.y,e.w,e.h);
+             ctx.strokeRect(e.x, e.y, e.w, e.h);
            });
          
-           // senyum
-           prevSmiles.forEach(s=>{
-             ctx.strokeStyle = (smileTimer && now - smileTimer<500)? 'orange':'red';
+           // Smiles
+           prevSmiles.forEach((s) => {
+             ctx.strokeStyle = (now - smileTimer < 500) ? "orange" : "red";
              ctx.lineWidth = 2;
-             ctx.strokeRect(s.x,s.y,s.w,s.h);
+             ctx.strokeRect(s.x, s.y, s.w, s.h);
            });
          
            animFrameId = requestAnimationFrame(drawOverlay);
          }
          
-         function stopCamera(){
-           if(sendInterval) clearInterval(sendInterval);
-           if(animFrameId) cancelAnimationFrame(animFrameId);
-           if(stream){
-             stream.getTracks().forEach(t=>t.stop());
-             stream=null;
-           }
-           ctx.clearRect(0,0,canvas.width,canvas.height);
-         }
+         /* ========== DISCONNECT ========== */
+         function disconnect() {
+           if (socket && socket.readyState === WebSocket.OPEN) socket.close();
          
-         function disconnect(){
-           if(socket && socket.readyState===WebSocket.OPEN) socket.close();
-           stopCamera();
-           overlayData = { faces: [], eyes: [], smiles: [], liveness:false, blink:false, smile:false };
+           if (sendInterval) clearInterval(sendInterval);
+           if (animFrameId) cancelAnimationFrame(animFrameId);
+           if (stream) {
+             stream.getTracks().forEach((t) => t.stop());
+             stream = null;
+           }
+         
+           overlayData = { faces: [], eyes: [], smiles: [], liveness:false };
            prevFaces = prevEyes = prevSmiles = [];
-           statusDiv.textContent='Disconnected';
-           statusDiv.className='';
-           connectBtn.textContent='Connect';
-           connectBtn.classList.remove('disconnect');
+         
+           setStatus("Disconnected", "");
+           connectBtn.textContent = "Connect";
+           connectBtn.classList.remove("disconnect");
          }
       </script>
    </body>
