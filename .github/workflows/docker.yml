@@ -28,24 +28,33 @@ jobs:
         run: |
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
 
-  # deploy:
-  #   needs: build
-  #   runs-on: ubuntu-latest
+  deploy:
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Deploy to Server via SSH
-  #       uses: appleboy/ssh-action@master
-  #       with:
-  #         host: ${{ secrets.SERVER_IP }}
-  #         username: ${{ secrets.SERVER_USER_PC }}
-  #         key: ${{ secrets.SERVER_SSH_KEY }}
-  #         script: |
-  #           docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
-  #           docker stop liveness || true
-  #           docker rm liveness || true
-  #           docker run -d \
-  #             --name liveness \
-  #             -p 8000:8000 \
-  #             ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-  #           echo "Deployment selesai!"
+      - name: Setup cloudflared
+        run: |
+          sudo apt update
+          sudo apt install cloudflared -y
+
+      - name: SSH into Raspi (via Cloudflare) and deploy Docker
+        run: |
+          echo "${CF_SSH_KEY}" > key.pem
+          chmod 600 key.pem
+
+          cloudflared access ssh \
+            --hostname ssh.raspi.nicolaboard.my.id \
+            --id $CF_TUNNEL_ID \
+            --secret $CF_TUNNEL_SECRET \
+            --account-id $CF_ACCOUNT_ID \
+            --ssh-key key.pem \
+            -- ssh -o StrictHostKeyChecking=no $CF_SSH_USER@ssh.raspi.nicolaboard.my.id "
+                cd /home/ncladr/app &&
+                docker stop myapp || true &&
+                docker rm myapp || true &&
+                docker build -t myapp . &&
+                docker run -d -p 8000:8000 --name myapp myapp
+            "
