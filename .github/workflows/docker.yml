@@ -29,32 +29,27 @@ jobs:
           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
 
   deploy:
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
       - name: Setup cloudflared
         run: |
           sudo apt update
           sudo apt install cloudflared -y
 
-      - name: SSH into Raspi (via Cloudflare) and deploy Docker
+      - name: Write SSH key
         run: |
-          echo "${CF_SSH_KEY}" > key.pem
+          echo "${{ secrets.CF_SSH_KEY }}" > key.pem
           chmod 600 key.pem
 
-          cloudflared access ssh \
-            --hostname ssh.raspi.nicolaboard.my.id \
-            --id $CF_TUNNEL_ID \
-            --secret $CF_TUNNEL_SECRET \
-            --account-id $CF_ACCOUNT_ID \
-            --ssh-key key.pem \
-            -- ssh -o StrictHostKeyChecking=no $CF_SSH_USER@ssh.raspi.nicolaboard.my.id "
-                cd /home/ncladr/app &&
-                docker stop myapp || true &&
-                docker rm myapp || true &&
-                docker build -t myapp . &&
-                docker run -d -p 8000:8000 --name myapp myapp
+      - name: Deploy to Raspberry Pi via Cloudflare Tunnel
+        run: |
+          # SSH over Cloudflare Access
+          cloudflared access ssh --hostname ssh.raspi.nicolaboard.my.id --ssh-key key.pem -- \
+            ssh -o StrictHostKeyChecking=no ${{ secrets.CF_SSH_USER }}@ssh.raspi.nicolaboard.my.id "
+              docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest &&
+              docker stop liveness || true &&
+              docker rm liveness || true &&
+              docker run -d -p 8000:8000 --name liveness ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
             "
