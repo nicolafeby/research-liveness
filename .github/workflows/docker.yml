@@ -35,17 +35,16 @@ jobs:
     steps:
       - name: Setup cloudflared
         run: |
-          sudo apt update
-          sudo apt install cloudflared -y
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+          sudo dpkg -i cloudflared.deb || sudo apt-get install -f -y
 
       - name: Write SSH key
         run: |
           echo "${{ secrets.CF_SSH_KEY }}" > key.pem
           chmod 600 key.pem
 
-      - name: Deploy to Raspberry Pi via Cloudflare Tunnel
+      - name: Deploy via Cloudflare SSH
         run: |
-          # SSH over Cloudflare Access
           cloudflared access ssh --hostname ssh.raspi.nicolaboard.my.id --ssh-key key.pem -- \
             ssh -o StrictHostKeyChecking=no ${{ secrets.CF_SSH_USER }}@ssh.raspi.nicolaboard.my.id "
               docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest &&
@@ -53,3 +52,4 @@ jobs:
               docker rm liveness || true &&
               docker run -d -p 8000:8000 --name liveness ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
             "
+
