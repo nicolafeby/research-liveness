@@ -45,11 +45,12 @@ jobs:
 
       - name: Deploy via Cloudflare SSH
         run: |
-          cloudflared access ssh --hostname ssh.raspi.nicolaboard.my.id --ssh-key key.pem -- \
-            ssh -o StrictHostKeyChecking=no ${{ secrets.CF_SSH_USER }}@ssh.raspi.nicolaboard.my.id "
+          cloudflared access ssh --hostname ssh.raspi.nicolaboard.my.id -- \
+            ssh -i key.pem -o StrictHostKeyChecking=no ${{ secrets.CF_SSH_USER }}@ssh.raspi.nicolaboard.my.id "
               docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest &&
               docker stop liveness || true &&
               docker rm liveness || true &&
               docker run -d -p 8000:8000 --name liveness ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
             "
+
 
