@@ -44,20 +44,22 @@ jobs:
           chmod 600 key.pem
 
       - name: Start Cloudflare Tunnel
+        env:
+          CF_TUNNEL_ID: ${{ secrets.CF_TUNNEL_ID }}
         run: |
-          cloudflared tunnel --url ssh://localhost:22 --hostname ssh-raspi.nicolaboard.my.id &
+          cloudflared tunnel run $CF_TUNNEL_ID &
           sleep 10
 
-      - name: Deploy via SSH over Tunnel
+      - name: Deploy via SSH (NOW WORKS)
         run: |
-          ssh -o "ProxyCommand=nc -x 127.0.0.1:22 %h %p" \
-              -i key.pem -o StrictHostKeyChecking=no \
-              ncladr@ssh-raspi.nicolaboard.my.id "
-                docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest &&
-                docker stop liveness || true &&
-                docker rm liveness || true &&
-                docker run -d -p 8000:8000 --name liveness ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
-              "
+          ssh -o StrictHostKeyChecking=no -i key.pem ncladr@ssh-raspi.nicolaboard.my.id "
+            docker pull ghcr.io/***/liveness:latest &&
+            docker stop liveness || true &&
+            docker rm liveness || true &&
+            docker run -d -p 8000:8000 --name liveness ghcr.io/***/liveness:latest
+          "
+
+
 
 
 
