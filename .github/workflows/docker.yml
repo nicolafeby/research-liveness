@@ -47,7 +47,7 @@ jobs:
         run: |
           ssh -o ProxyCommand="cloudflared access ssh --hostname %h" \
               -i key.pem -o StrictHostKeyChecking=no \
-              ${{ secrets.CF_SSH_USER }}@ssh.raspi.nicolaboard.my.id "
+              ${{ secrets.CF_SSH_USER }}@ssh-raspi.nicolaboard.my.id "
                 docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest &&
                 docker stop liveness || true &&
                 docker rm liveness || true &&
