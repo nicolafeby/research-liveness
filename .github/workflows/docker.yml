@@ -3,18 +3,18 @@ name: Deploy to ARM Server
 on:
   push:
     branches:
-      - main   # Jalankan workflow setiap push ke branch main
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (needed for Actions context only)
+      - name: Checkout
         uses: actions/checkout@v3
 
       - name: Deploy to ARM Server
-        uses: appleboy/ssh-action@v0.1.11
+        uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
@@ -25,16 +25,17 @@ jobs:
             cd ~/liveness-project
             git pull
 
-            echo "🛑 Stopping old container"
+            echo "🛑 Removing old container"
             docker rm -f liveness || true
 
-            echo "🐳 Building Docker image on ARM64 server"
+            echo "🐳 Building Docker image on ARM64"
             docker build -t liveness-poc .
 
-            echo "🚀 Running new container"
+            echo "🚀 Running container"
             docker run -d --name liveness -p 8000:8000 liveness-poc
 
-            echo "🎉 Deployment completed successfully!"
+            echo "🎉 Deployment done!"
+
 
 
 
