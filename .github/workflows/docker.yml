@@ -1,4 +1,4 @@
-name: Deploy to ARM Server
+name: Deploy via Cloudflare SSH Tunnel
 
 on:
   push:
@@ -10,31 +10,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v3
+      
+      - name: Install cloudflared on GitHub Runner
+        run: |
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+          sudo dpkg -i cloudflared.deb
 
-      - name: Deploy to ARM Server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            echo "🚀 Pulling latest code"
+      - name: Connect to server via Cloudflare Tunnel SSH
+        run: |
+          echo "Using Cloudflare Access SSH..."
+
+          mkdir -p ~/.ssh
+          echo "${{ secrets.CF_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          cloudflared access ssh --hostname ssh-server.nicolaboard.my.id -- ssh -o StrictHostKeyChecking=no root@localhost << 'EOF'
+            echo "📥 Pull latest code"
             cd ~/liveness-project || git clone https://github.com/nicolafeby/liveness.git ~/liveness-project
             cd ~/liveness-project
             git pull
 
-            echo "🛑 Removing old container"
+            echo "🛑 Remove old container"
             docker rm -f liveness || true
 
-            echo "🐳 Building Docker image on ARM64"
+            echo "🐳 Build new docker image"
             docker build -t liveness-poc .
 
-            echo "🚀 Running container"
+            echo "🚀 Start container"
             docker run -d --name liveness -p 8000:8000 liveness-poc
+            echo "🎉 Done"
+          EOF
 
-            echo "🎉 Deployment done!"
 
 
 
