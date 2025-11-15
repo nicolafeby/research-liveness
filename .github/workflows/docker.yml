@@ -1,4 +1,4 @@
-name: Build & Push Docker to GHCR
+name: Build & Push Multi-Arch Docker Image to GHCR
 
 on:
   push:
@@ -11,20 +11,25 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Log in to GHCR
+      - name: Login to GHCR
         run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
 
-      - name: Build Docker image
-        run: |
-          IMAGE="ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness-poc:latest"
-          docker build -t $IMAGE .
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Push image
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Multi-Arch Image
         run: |
           IMAGE="ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness-poc:latest"
-          docker push $IMAGE
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t $IMAGE \
+            --push .
+
 
 
 # name: Build & Deploy Liveness App
