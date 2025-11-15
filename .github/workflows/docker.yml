@@ -1,36 +1,42 @@
-name: Build ARM64 Docker Image for GHCR
+name: Deploy to ARM Server
 
 on:
   push:
-    branches: ["main"]
-  workflow_dispatch:
+    branches:
+      - main   # Jalankan workflow setiap push ke branch main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository (needed for Actions context only)
+        uses: actions/checkout@v3
 
-      - name: Login to GHCR
-        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and Push ARM64 Only
-        uses: docker/build-push-action@v5
+      - name: Deploy to ARM Server
+        uses: appleboy/ssh-action@v0.1.11
         with:
-          context: .
-          push: true
-          platforms: linux/arm64
-          tags: ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness-poc:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "🚀 Pulling latest code"
+            cd ~/liveness-project || git clone https://github.com/nicolafeby/liveness.git ~/liveness-project
+            cd ~/liveness-project
+            git pull
+
+            echo "🛑 Stopping old container"
+            docker rm -f liveness || true
+
+            echo "🐳 Building Docker image on ARM64 server"
+            docker build -t liveness-poc .
+
+            echo "🚀 Running new container"
+            docker run -d --name liveness -p 8000:8000 liveness-poc
+
+            echo "🎉 Deployment completed successfully!"
+
+
 
 
 
