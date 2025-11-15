@@ -1,4 +1,4 @@
-name: Deploy via Cloudflare SSH Tunnel
+name: Deploy via Cloudflare Tunnel SSH
 
 on:
   push:
@@ -10,38 +10,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      
-      - name: Install cloudflared on GitHub Runner
-        run: |
-          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
-          sudo dpkg -i cloudflared.deb
+    - name: Checkout
+      uses: actions/checkout@v3
 
-      - name: Connect to server via Cloudflare Tunnel SSH
-        run: |
-          echo "Using Cloudflare Access SSH..."
+    - name: Install cloudflared
+      run: |
+        curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+        sudo dpkg -i cloudflared.deb
 
-          mkdir -p ~/.ssh
-          echo "${{ secrets.CF_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+    - name: Create Cloudflare Tunnel Config
+      run: |
+        mkdir -p ~/.cloudflared
+        cat > ~/.cloudflared/${{ secrets.CF_TUNNEL_ID }}.json <<EOF
+        {
+          "AccountTag": "${{ secrets.CF_ACCOUNT_ID }}",
+          "TunnelSecret": "${{ secrets.CF_TUNNEL_SECRET }}",
+          "TunnelID": "${{ secrets.CF_TUNNEL_ID }}"
+        }
+        EOF
 
-          cloudflared access ssh --hostname ssh-server.nicolaboard.my.id -- ssh -o StrictHostKeyChecking=no root@localhost << 'EOF'
-            echo "📥 Pull latest code"
-            cd ~/liveness-project || git clone https://github.com/nicolafeby/liveness.git ~/liveness-project
-            cd ~/liveness-project
-            git pull
+        cat > ~/.cloudflared/config.yml <<EOF
+        tunnel: ${{ secrets.CF_TUNNEL_ID }}
+        credentials-file: /home/runner/.cloudflared/${{ secrets.CF_TUNNEL_ID }}.json
+        ingress:
+          - service: ssh://localhost:22
+        EOF
 
-            echo "🛑 Remove old container"
-            docker rm -f liveness || true
+    - name: Start Cloudflare Tunnel
+      run: |
+        nohup cloudflared tunnel run ${{ secrets.CF_TUNNEL_ID }} > tunnel.log 2>&1 &
+        sleep 5
 
-            echo "🐳 Build new docker image"
-            docker build -t liveness-poc .
+    - name: Add SSH Key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.CF_SSH_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
 
-            echo "🚀 Start container"
-            docker run -d --name liveness -p 8000:8000 liveness-poc
-            echo "🎉 Done"
-          EOF
+    - name: Deploy via SSH over Cloudflare Tunnel
+      run: |
+        ssh -o StrictHostKeyChecking=no -p 22 ${{ secrets.CF_SSH_USER }}@localhost << 'EOF'
+          echo "📥 Pull latest code"
+          cd ~/liveness-project || git clone https://github.com/nicolafeby/liveness.git ~/liveness-project
+          cd ~/liveness-project
+          git pull
+
+          echo "🛑 Removing old container"
+          docker rm -f liveness || true
+
+          echo "🐳 Building Docker image"
+          docker build -t liveness-poc .
+
+          echo "🚀 Starting new container"
+          docker run -d --name liveness -p 8000:8000 liveness-poc
+
+          echo "🎉 Deployment done!"
+        EOF
+
 
 
 
