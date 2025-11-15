@@ -1,4 +1,4 @@
-name: Build & Deploy Liveness App
+name: Build & Push Docker to GHCR
 
 on:
   push:
@@ -10,54 +10,83 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
 
-      - name: Build Docker Image
+      - name: Build Docker image
         run: |
-          docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest .
+          IMAGE="ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness-poc:latest"
+          docker build -t $IMAGE .
 
-      - name: Push Image to GHCR
+      - name: Push image
         run: |
-          docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
+          IMAGE="ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness-poc:latest"
+          docker push $IMAGE
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
 
-    steps:
-      - name: Install cloudflared
-        run: |
-          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
-          sudo dpkg -i cloudflared.deb || sudo apt-get install -f -y
+# name: Build & Deploy Liveness App
 
-      - name: Write SSH key
-        run: |
-          echo "${{ secrets.SSH_KEY }}" > key.pem
-          chmod 600 key.pem
+# on:
+#   push:
+#     branches: ["main"]
+#   workflow_dispatch:
 
-      - name: Start Cloudflare Tunnel
-        env:
-          CF_TUNNEL_ID: ${{ secrets.CF_TUNNEL_ID }}
-        run: |
-          cloudflared tunnel run $CF_TUNNEL_ID &
-          sleep 10
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
 
-      - name: Deploy via SSH (NOW WORKS)
-        run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ncladr@ssh-raspi.nicolaboard.my.id "
-            docker pull ghcr.io/***/liveness:latest &&
-            docker stop liveness || true &&
-            docker rm liveness || true &&
-            docker run -d -p 8000:8000 --name liveness ghcr.io/***/liveness:latest
-          "
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v3
+
+#       - name: Log in to GHCR
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ghcr.io
+#           username: ${{ secrets.GHCR_USERNAME }}
+#           password: ${{ secrets.GHCR_TOKEN }}
+
+#       - name: Build Docker Image
+#         run: |
+#           docker build -t ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest .
+
+#       - name: Push Image to GHCR
+#         run: |
+#           docker push ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
+
+#   deploy:
+#     needs: build
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Install cloudflared
+#         run: |
+#           curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+#           sudo dpkg -i cloudflared.deb || sudo apt-get install -f -y
+
+#       - name: Write SSH key
+#         run: |
+#           echo "${{ secrets.SSH_KEY }}" > key.pem
+#           chmod 600 key.pem
+
+#       - name: Start Cloudflare Tunnel
+#         env:
+#           CF_TUNNEL_ID: ${{ secrets.CF_TUNNEL_ID }}
+#         run: |
+#           cloudflared tunnel run $CF_TUNNEL_ID &
+#           sleep 10
+
+#       - name: Deploy via SSH (NOW WORKS)
+#         run: |
+#           ssh -o StrictHostKeyChecking=no -i key.pem ncladr@ssh-raspi.nicolaboard.my.id "
+#             docker pull ghcr.io/***/liveness:latest &&
+#             docker stop liveness || true &&
+#             docker rm liveness || true &&
+#             docker run -d -p 8000:8000 --name liveness ghcr.io/***/liveness:latest
+#           "
 
 
 
