@@ -43,16 +43,20 @@ jobs:
           echo "${{ secrets.CF_SSH_KEY }}" > key.pem
           chmod 600 key.pem
 
-      - name: Deploy via Cloudflare SSH
+      - name: Deploy via Tunnel (no Access)
         run: |
+          echo "${{ secrets.SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
           ssh -o ProxyCommand="cloudflared access ssh --hostname %h" \
               -i key.pem -o StrictHostKeyChecking=no \
-              ${{ secrets.CF_SSH_USER }}@ssh-raspi.nicolaboard.my.id "
+              ncladr@ssh-raspi.nicolaboard.my.id "
                 docker pull ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest &&
                 docker stop liveness || true &&
                 docker rm liveness || true &&
                 docker run -d -p 8000:8000 --name liveness ghcr.io/${{ secrets.GHCR_USERNAME }}/liveness:latest
               "
+
 
 
 
