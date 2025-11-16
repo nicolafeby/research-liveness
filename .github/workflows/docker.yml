@@ -108,8 +108,8 @@ jobs:
       run: |
         cloudflared access ssh \
           --hostname ssh-raspi.nicolaboard.my.id \
-          --client-id ${{ secrets.CF_CLIENT_ID }} \
-          --client-secret ${{ secrets.CF_CLIENT_SECRET }} \
+          --service-token-id ${{ secrets.CF_SERVICE_TOKEN_ID }} \
+          --service-token-secret ${{ secrets.CF_SERVICE_TOKEN_SECRET }} \
           --loglevel debug || true
 
 
@@ -121,8 +121,8 @@ jobs:
         ssh \
           -o ProxyCommand="cloudflared access ssh \
               --hostname ssh-raspi.nicolaboard.my.id \
-              --client-id ${{ secrets.CF_CLIENT_ID }} \
-              --client-secret ${{ secrets.CF_CLIENT_SECRET }}" \
+              --service-token-id ${{ secrets.CF_SERVICE_TOKEN_ID }} \
+              --service-token-secret ${{ secrets.CF_SERVICE_TOKEN_SECRET }}" \
           -o StrictHostKeyChecking=no \
           ${{ secrets.CF_SSH_USER }}@ssh-raspi.nicolaboard.my.id << 'EOF'
         echo "📥 Pull latest image"
