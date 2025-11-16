@@ -86,8 +86,8 @@ jobs:
     - name: Add SSH Key
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.CF_SSH_KEY }}" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
+        echo "${{ secrets.CF_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
 
     - name: Deploy to Server via SSH over Tunnel
       run: |
