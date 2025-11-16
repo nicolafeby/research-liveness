@@ -100,6 +100,14 @@ jobs:
     - name: Debug cloudflared
       run: cloudflared --version
 
+    - name: Test Cloudflare Token
+      run: |
+        cloudflared access token \
+          --hostname ssh-raspi.nicolaboard.my.id \
+          --client-id ${{ secrets.CF_CLIENT_ID }} \
+          --client-secret ${{ secrets.CF_CLIENT_SECRET }}
+
+
     - name: Deploy via SSH over Cloudflare Access
       run: |
         ssh \
