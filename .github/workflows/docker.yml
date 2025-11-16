@@ -4,10 +4,10 @@ on:
   push:
     branches: ["main"]
 
-# ------------------------------------------
-# JOB 1 — BUILD IMAGE ARM64 & PUSH GHCR
-# ------------------------------------------
 jobs:
+  # ----------------------------------------------------------
+  # JOB 1 — BUILD IMAGE ARM64 & PUSH GHCR
+  # ----------------------------------------------------------
   build:
     runs-on: ubuntu-latest
 
@@ -38,9 +38,9 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-# ------------------------------------------
-# JOB 2 — START CLOUDFLARE TUNNEL
-# ------------------------------------------
+  # ----------------------------------------------------------
+  # JOB 2 — START CLOUDFLARE TUNNEL
+  # ----------------------------------------------------------
   tunnel:
     runs-on: ubuntu-latest
     needs: build
@@ -75,19 +75,33 @@ jobs:
         nohup cloudflared tunnel run ${{ secrets.CF_TUNNEL_ID }} > tunnel.log 2>&1 &
         sleep 5
 
-# ------------------------------------------
-# JOB 3 — DEPLOY VIA SSH → PULL IMAGE → RUN CONTAINER
-# ------------------------------------------
+  # ----------------------------------------------------------
+  # JOB 3 — DEPLOY VIA SSH → PULL IMAGE → RUN CONTAINER
+  # ----------------------------------------------------------
   deploy:
     runs-on: ubuntu-latest
     needs: tunnel
 
     steps:
-    - name: Add SSH Key
+    - name: Add SSH Key (ED25519)
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.CF_SSH_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+        echo "${{ secrets.CF_SSH_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+
+    - name: Configure SSH
+      run: |
+        echo "Host *" > ~/.ssh/config
+        echo "  IdentityFile ~/.ssh/id_ed25519" >> ~/.ssh/config
+        echo "  IdentitiesOnly yes" >> ~/.ssh/config
+        chmod 600 ~/.ssh/config
+
+    - name: Debug SSH Files
+      run: |
+        ls -l ~/.ssh
+        echo "--- PRIVATE KEY START ---"
+        sed 's/./*/g' ~/.ssh/id_ed25519 | head -n 5
+        echo "--- PRIVATE KEY END ---"
 
     - name: Deploy to Server via SSH over Tunnel
       run: |
@@ -106,6 +120,7 @@ jobs:
 
           echo "🎉 Deployment complete!"
         EOF
+
 
 
 
