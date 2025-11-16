@@ -102,8 +102,8 @@ jobs:
 
     - name: Test Cloudflare Token
       run: |
-        cloudflared access token \
-          --hostname ssh-raspi.nicolaboard.my.id \
+        cloudflared access token https://ssh-raspi.nicolaboard.my.id \
+          --app=ssh \
           --client-id ${{ secrets.CF_CLIENT_ID }} \
           --client-secret ${{ secrets.CF_CLIENT_SECRET }}
 
