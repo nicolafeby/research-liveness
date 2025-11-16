@@ -97,12 +97,26 @@ jobs:
         wget -O cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
         sudo dpkg -i cloudflared.deb
 
-    - name: Debug cloudflared
+    - name: Debug cloudflared version
       run: cloudflared --version
 
-    # ⚠️ TEST TOKEN DIHAPUS — TIDAK SUPPORT UNTUK SSH APP
 
-    - name: Deploy via SSH over Cloudflare Access
+    # =====================================================
+    # 🔥🔥🔥 FULL DEBUG MODE (PENTING!)
+    # =====================================================
+    - name: Cloudflare DEBUG AUTHENTICATION
+      run: |
+        cloudflared access ssh \
+          --hostname ssh-raspi.nicolaboard.my.id \
+          --client-id ${{ secrets.CF_CLIENT_ID }} \
+          --client-secret ${{ secrets.CF_CLIENT_SECRET }} \
+          --loglevel debug || true
+
+
+    # =====================================================
+    # SSH DEPLOY
+    # =====================================================
+    - name: Deploy via Cloudflare SSH
       run: |
         ssh \
           -o ProxyCommand="cloudflared access ssh \
@@ -111,7 +125,7 @@ jobs:
               --client-secret ${{ secrets.CF_CLIENT_SECRET }}" \
           -o StrictHostKeyChecking=no \
           ${{ secrets.CF_SSH_USER }}@ssh-raspi.nicolaboard.my.id << 'EOF'
-        echo "📥 Pulling latest image"
+        echo "📥 Pull latest image"
         docker pull ghcr.io/nicolafeby/research-liveness:latest
 
         echo "🛑 Removing old container"
