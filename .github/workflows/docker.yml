@@ -6,9 +6,9 @@ on:
 
 jobs:
 
-  # ------------------------------------------
-  # JOB 1 — BUILD ARM64 & PUSH TO GHCR
-  # ------------------------------------------
+  # ====================================================
+  # JOB 1 — BUILD ARM64 IMAGE & PUSH GHCR
+  # ====================================================
   build:
     runs-on: ubuntu-latest
 
@@ -36,12 +36,11 @@ jobs:
         platforms: linux/arm64
         push: true
         tags: ghcr.io/nicolafeby/research-liveness:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
-  # ------------------------------------------
-  # JOB 2 — START CLOUDFLARED TUNNEL (RUNNER)
-  # ------------------------------------------
+
+  # ====================================================
+  # JOB 2 — START CLOUDFLARED TUNNEL (LOCAL TO RUNNER)
+  # ====================================================
   tunnel:
     runs-on: ubuntu-latest
     needs: build
@@ -52,16 +51,14 @@ jobs:
         wget -O cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
         sudo dpkg -i cloudflared.deb
 
-    - name: Create Cloudflare Tunnel Config
+    - name: Create Tunnel Config
       run: |
         mkdir -p ~/.cloudflared
-        cat > ~/.cloudflared/${{ secrets.CF_TUNNEL_ID }}.json <<EOF
-        {
+        echo '{
           "TunnelID": "${{ secrets.CF_TUNNEL_ID }}",
           "TunnelSecret": "${{ secrets.CF_TUNNEL_SECRET }}",
           "AccountTag": "${{ secrets.CF_ACCOUNT_ID }}"
-        }
-        EOF
+        }' > ~/.cloudflared/${{ secrets.CF_TUNNEL_ID }}.json
 
         cat > ~/.cloudflared/config.yml <<EOF
         tunnel: ${{ secrets.CF_TUNNEL_ID }}
@@ -72,27 +69,27 @@ jobs:
           - service: http_status:404
         EOF
 
-    - name: Start Cloudflare Tunnel
-      run: |
-        nohup cloudflared tunnel run ${{ secrets.CF_TUNNEL_ID }} > tunnel.log 2>&1 &
-        sleep 5
+            - name: Start Cloudflare Tunnel
+              run: |
+                nohup cloudflared tunnel run ${{ secrets.CF_TUNNEL_ID }} > tunnel.log 2>&1 &
+                sleep 5
 
 
-  # ------------------------------------------
-  # JOB 3 — DEPLOY VIA CLOUDFLARED SSH
-  # ------------------------------------------
+  # ====================================================
+  # JOB 3 — DEPLOY TO SERVER (SSH VIA CLOUDFLARED)
+  # ====================================================
   deploy:
     runs-on: ubuntu-latest
     needs: tunnel
 
     steps:
-    - name: Add SSH Key
+    - name: Add SSH Private Key
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.CF_SSH_KEY }}" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
 
-    - name: Install cloudflared (client)
+    - name: Install cloudflared
       run: |
         wget -O cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
         sudo dpkg -i cloudflared.deb
@@ -100,15 +97,7 @@ jobs:
     - name: Debug cloudflared
       run: cloudflared --version
 
-    - name: Test Cloudflare Token
-      run: |
-        cloudflared access token https://ssh-raspi.nicolaboard.my.id \
-          --app=ssh \
-          --client-id ${{ secrets.CF_CLIENT_ID }} \
-          --client-secret ${{ secrets.CF_CLIENT_SECRET }}
-
-
-    - name: Deploy via SSH over Cloudflare Access
+    - name: Deploy via Cloudflare SSH
       run: |
         ssh \
           -o ProxyCommand="cloudflared access ssh \
@@ -117,18 +106,18 @@ jobs:
               --client-secret ${{ secrets.CF_CLIENT_SECRET }}" \
           -o StrictHostKeyChecking=no \
           ${{ secrets.CF_SSH_USER }}@ssh-raspi.nicolaboard.my.id << 'EOF'
-          
-            echo "📥 Pulling latest image"
+
+            echo "📥 Pull latest image"
             docker pull ghcr.io/nicolafeby/research-liveness:latest
 
             echo "🛑 Removing old container"
             docker rm -f liveness || true
 
-            echo "🚀 Starting new container"
+            echo "🚀 Running new container"
             docker run -d \
-              --name liveness \
-              -p 8000:8000 \
-              ghcr.io/nicolafeby/research-liveness:latest
+                --name liveness \
+                -p 8000:8000 \
+                ghcr.io/nicolafeby/research-liveness:latest
 
             echo "🎉 Deployment complete!"
         EOF
