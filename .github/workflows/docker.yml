@@ -34,7 +34,7 @@ jobs:
         context: .
         platforms: linux/arm64
         push: true
-        tags: ghcr.io/USERNAME/REPO:latest
+        tags: ghcr.io/nicolafeby/research-liveness:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
