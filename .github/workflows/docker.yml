@@ -96,31 +96,33 @@ jobs:
         echo "  IdentitiesOnly yes" >> ~/.ssh/config
         chmod 600 ~/.ssh/config
 
-    - name: Debug SSH Files
+    - name: Install cloudflared (client)
       run: |
-        ls -l ~/.ssh
-        echo "--- PRIVATE KEY START ---"
-        sed 's/./*/g' ~/.ssh/id_ed25519 | head -n 5
-        echo "--- PRIVATE KEY END ---"
+        wget -O cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+        sudo dpkg -i cloudflared.deb
+
+    - name: Debug cloudflared
+      run: cloudflared --version
 
     - name: Deploy to Server via Cloudflare SSH
       run: |
-        cloudflared --version
         ssh \
           -o ProxyCommand="cloudflared access ssh --hostname ssh-raspi.nicolaboard.my.id" \
           -o StrictHostKeyChecking=no \
           ${{ secrets.CF_SSH_USER }}@ssh-raspi.nicolaboard.my.id << 'EOF'
-              echo "📥 Pull latest image"
-              docker pull ghcr.io/nicolafeby/research-liveness:latest
 
-              echo "🛑 Stopping old container"
-              docker rm -f liveness || true
+            echo "📥 Pull latest image"
+            docker pull ghcr.io/nicolafeby/research-liveness:latest
 
-              echo "🚀 Starting new container"
-              docker run -d --name liveness -p 8000:8000 ghcr.io/nicolafeby/research-liveness:latest
+            echo "🛑 Stopping old container"
+            docker rm -f liveness || true
 
-              echo "🎉 Deployment complete!"
+            echo "🚀 Starting new container"
+            docker run -d --name liveness -p 8000:8000 ghcr.io/nicolafeby/research-liveness:latest
+
+            echo "🎉 Deployment complete!"
         EOF
+
 
 
 # name: Build & Deploy Liveness App
